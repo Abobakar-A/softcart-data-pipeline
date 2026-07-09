@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw
+    database: softcart_db
+    schema: raw
+    tables:
+      - name: customers
+      - name: products
+      - name: orders
+      - name: order_items

@@ -1,0 +1,116 @@
+version: 2
+
+models:
+  - name: stg_customers
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: customer_id
+        data_type: int
+        tests:
+          - unique
+          - not_null
+      - name: first_name
+        data_type: string
+      - name: last_name
+        data_type: string
+      - name: email
+        data_type: string
+        tests:
+          - not_null
+      - name: signup_date
+        data_type: date
+      - name: city
+        data_type: string
+      - name: country
+        data_type: string
+
+  - name: stg_products
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: product_id
+        data_type: int
+        tests:
+          - unique
+          - not_null
+      - name: product_name
+        data_type: string
+      - name: category
+        data_type: string
+      - name: brand
+        data_type: string
+      - name: unit_price
+        data_type: number(10,2)
+
+  - name: stg_orders
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: order_id
+        data_type: int
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        data_type: int
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: order_date
+        data_type: timestamp_ntz
+      - name: payment_method
+        data_type: string
+      - name: payment_status
+        data_type: string
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['paid', 'failed', 'refunded', 'pending']
+      - name: shipment_status
+        data_type: string
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['delivered', 'shipped', 'processing', 'cancelled']
+      - name: order_total
+        data_type: number(10,2)
+
+  - name: stg_order_items
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: order_item_id
+        data_type: int
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+        data_type: int
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: product_id
+        data_type: int
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
+      - name: quantity
+        data_type: int
+      - name: unit_price
+        data_type: number(10,2)
+      - name: line_total
+        data_type: number(10,2)

@@ -1,0 +1,15 @@
+version: 2
+
+models:
+  - name: dim_customers
+    config:
+      materialized: table
+      schema: marts
+  - name: dim_products
+    config:
+      materialized: table
+      schema: marts
+  - name: fct_orders
+    config:
+      materialized: table
+      schema: marts
