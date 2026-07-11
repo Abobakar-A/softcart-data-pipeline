@@ -1,1 +1,1 @@
-select nonexistent_column from {{ ref('stg_customers') }}
+select * from {{ ref('this_model_does_not_exist') }}
