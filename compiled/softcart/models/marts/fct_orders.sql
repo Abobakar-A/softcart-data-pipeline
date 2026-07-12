@@ -1,3 +1,4 @@
+
 select
     oi.order_item_id,
     oi.order_id,
@@ -14,3 +15,5 @@ select
 from softcart_db.staging.stg_order_items oi
 left join softcart_db.staging.stg_orders o
     on oi.order_id = o.order_id
+
+where o.order_date > (select max(order_date) from softcart_db.marts.fct_orders)
