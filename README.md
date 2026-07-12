@@ -28,6 +28,7 @@ All of the above is orchestrated end-to-end by **Apache Airflow**, running in Do
 | Data warehouse | Snowflake |
 | Transformation & testing | dbt (dbt-snowflake) |
 | Orchestration | Apache Airflow (Docker Compose, CeleryExecutor) |
+| CI | GitHub Actions |
 | Version control | Git / GitHub |
 | Dev environment | GitHub Codespaces |
 
@@ -54,6 +55,9 @@ All of the above is orchestrated end-to-end by **Apache Airflow**, running in Do
     │   ├── docker-compose.yaml
     │   └── dags/
     │       └── softcart_pipeline.py
+    ├── .github/
+    │   └── workflows/
+    │       └── dbt-ci.yml
     └── README.md
 
 - `models/staging/` - 1:1 cleaned models from raw source tables
@@ -63,6 +67,7 @@ All of the above is orchestrated end-to-end by **Apache Airflow**, running in Do
 - `macros/generate_schema_name.sql` - ensures models land in exact schema names (no prefixing)
 - `airflow/docker-compose.yaml` - full Airflow stack (Postgres, Redis, webserver, scheduler, worker, triggerer, dbt runner)
 - `airflow/dags/softcart_pipeline.py` - the orchestration DAG
+- `.github/workflows/dbt-ci.yml` - CI workflow (dbt compile + DAG validation)
 
 ## Data model
 
@@ -97,6 +102,15 @@ The DAG `softcart_pipeline` runs daily and chains three tasks:
 
 ### Why a separate dbt container?
 `dbt-snowflake` and Airflow's own Snowflake provider have conflicting dependency requirements (specifically around `snowflake-connector-python`) that make them impossible to install in the same Python environment. Rather than fight that, dbt runs in its own lightweight container (`python:3.12-slim` + dbt installed at startup), and Airflow triggers it via `docker exec`, using a Docker-socket mount for cross-container control.
+
+## Continuous Integration
+
+A GitHub Actions workflow (`.github/workflows/dbt-ci.yml`) runs on every push and PR to `main`, with two jobs:
+
+- **`dbt-compile`** - installs `dbt-snowflake`, builds a profile from repo secrets, and runs `dbt compile` to catch model/reference errors before merge.
+- **`dag-validate`** - checks DAG Python syntax, installs a pinned Airflow + provider set matching the production container (`apache-airflow==2.10.4`, `apache-airflow-providers-snowflake==5.8.1`), and loads the DAG via `DagBag` to catch import errors.
+
+Provider versions in this job are intentionally pinned to match what's installed in the production Airflow container, to avoid false-positive failures from upstream provider version changes (e.g. operator renames).
 
 ## Running this locally / in a Codespace
 
@@ -142,10 +156,10 @@ Done:
 - ADLS Gen2 + Snowflake storage integration
 - dbt models, contracts, and 17 passing data quality tests
 - Full 3-task Airflow DAG, tested and passing end-to-end
+- CI via GitHub Actions (dbt compile + DAG validation on push/PR to main)
 - Version controlled on GitHub
 
 Not yet implemented (roadmap):
-- CI/CD via GitHub Actions (dbt compile/lint checks on PR)
 - dbt docs site generation
 - BI/dashboard layer on top of the marts schema
 - Incremental materialization for `fct_orders`
