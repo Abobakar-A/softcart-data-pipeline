@@ -13,3 +13,7 @@ models:
     config:
       materialized: table
       schema: marts
+  - name: fct_clickstream_events
+    config:
+      materialized: incremental
+      schema: marts

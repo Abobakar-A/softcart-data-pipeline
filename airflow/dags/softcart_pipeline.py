@@ -56,6 +56,79 @@ def generate_and_upload_orders(**context):
     context["ti"].xcom_push(key="uploaded_file", value=file_name)
 
 
+
+
+
+def generate_and_upload_clickstream(**context):
+    from azure.storage.filedatalake import DataLakeServiceClient
+    import uuid
+    import json
+
+    conn = BaseHook.get_connection("azure_data_lake_default")
+    connection_string = conn.extra_dejson.get("connection_string")
+    service_client = DataLakeServiceClient.from_connection_string(connection_string)
+    file_system_client = service_client.get_file_system_client(file_system="bronze")
+
+    events = []
+    num_sessions = 30
+
+    for _ in range(num_sessions):
+        session_id = f"sess_{uuid.uuid4().hex[:8]}"
+        customer_id = random.randint(1, 500)
+        base_time = datetime.now()
+
+        for i in range(random.randint(1, 3)):
+            events.append({
+                "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                "session_id": session_id,
+                "customer_id": customer_id,
+                "event_type": "page_view",
+                "product_id": None,
+                "event_timestamp": (base_time + timedelta(seconds=i * 5)).strftime("%Y-%m-%dT%H:%M:%S"),
+            })
+
+        if random.random() < 0.6:
+            product_id = random.randint(1, 200)
+            events.append({
+                "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                "session_id": session_id,
+                "customer_id": customer_id,
+                "event_type": "product_view",
+                "product_id": product_id,
+                "event_timestamp": (base_time + timedelta(seconds=20)).strftime("%Y-%m-%dT%H:%M:%S"),
+            })
+
+            if random.random() < 0.4:
+                events.append({
+                    "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                    "session_id": session_id,
+                    "customer_id": customer_id,
+                    "event_type": "add_to_cart",
+                    "product_id": product_id,
+                    "event_timestamp": (base_time + timedelta(seconds=40)).strftime("%Y-%m-%dT%H:%M:%S"),
+                })
+
+                if random.random() < 0.5:
+                    events.append({
+                        "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                        "session_id": session_id,
+                        "customer_id": customer_id,
+                        "event_type": "purchase",
+                        "product_id": product_id,
+                        "event_timestamp": (base_time + timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%S"),
+                    })
+
+    buffer = io.StringIO()
+    for event in events:
+        buffer.write(json.dumps(event) + "\n")
+
+    file_name = f"clickstream/events_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    file_client = file_system_client.get_file_client(file_name)
+    file_client.upload_data(buffer.getvalue(), overwrite=True)
+
+    print(f"Uploaded {len(events)} clickstream events to {file_name}")
+    context["ti"].xcom_push(key="uploaded_clickstream_file", value=file_name)
+
 with DAG(
     dag_id="softcart_pipeline",
     default_args=default_args,
@@ -69,6 +142,11 @@ with DAG(
     generate_data_task = PythonOperator(
         task_id="generate_and_upload_orders",
         python_callable=generate_and_upload_orders,
+    )
+
+    generate_clickstream_task = PythonOperator(
+        task_id="generate_and_upload_clickstream",
+        python_callable=generate_and_upload_clickstream,
     )
 
     load_to_snowflake_task = SnowflakeOperator(
@@ -89,5 +167,6 @@ with DAG(
             "docker exec airflow-dbt-1 dbt build --project-dir /opt/dbt_project"
         ),
     )
+
 
     generate_data_task >> load_to_snowflake_task >> run_dbt_task

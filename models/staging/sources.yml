@@ -9,3 +9,4 @@ sources:
       - name: products
       - name: orders
       - name: order_items
+      - name: clickstream_events
