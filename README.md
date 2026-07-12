@@ -179,10 +179,11 @@ Done:
 - dbt models, contracts, and 17 passing data quality tests
 - Full 3-task Airflow DAG, tested and passing end-to-end
 - CI via GitHub Actions (dbt compile + DAG validation on push/PR to main)
+- dbt docs site generation, auto-deployed to GitHub Pages: https://abobakar-a.github.io/softcart-data-pipeline/
+- Incremental materialization for `fct_orders`
+- SCD Type 2 change tracking for `dim_customers` and `dim_products` via dbt snapshots
 - Version controlled on GitHub
 
 Not yet implemented (roadmap):
-- dbt docs site generation
 - BI/dashboard layer on top of the marts schema
-- Incremental materialization for `fct_orders`
 - Failure alerting (email/Slack)
