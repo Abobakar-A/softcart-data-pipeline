@@ -45,3 +45,38 @@ jobs:
 
       - name: dbt compile
         run: dbt compile --project-dir . --profiles-dir ~/.dbt
+
+  dag-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check Python syntax
+        run: python -m py_compile airflow/dags/softcart_pipeline.py
+
+      - name: Install Airflow for DAG validation
+        run: pip install apache-airflow==2.10.4 apache-airflow-providers-snowflake faker azure-storage-file-datalake
+
+      - name: Validate DAG loads without errors
+        run: |
+          export AIRFLOW_HOME=/tmp/airflow_ci
+          mkdir -p $AIRFLOW_HOME/dags
+          cp airflow/dags/softcart_pipeline.py $AIRFLOW_HOME/dags/
+          airflow db init
+          python -c "
+          from airflow.models import DagBag
+          db = DagBag(dag_folder='$AIRFLOW_HOME/dags', include_examples=False)
+          if db.import_errors:
+              print('DAG import errors found:')
+              for filename, error in db.import_errors.items():
+                  print(f'{filename}: {error}')
+              exit(1)
+          else:
+              print(f'Successfully loaded {len(db.dags)} DAG(s), no errors.')
+          "
