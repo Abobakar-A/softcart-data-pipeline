@@ -92,6 +92,28 @@ All of the above is orchestrated end-to-end by **Apache Airflow**, running in Do
 
 Run everything with: `dbt build`
 
+## Change Tracking (SCD Snapshots)
+
+Customer and product dimensions can change over time (e.g. a customer moves cities, a product's price changes). Instead of overwriting old values, this project uses **dbt snapshots** to implement **SCD Type 2** tracking: every change is preserved as history, with each row marked by the time range during which it was the current, valid version.
+
+- `snapshots/dim_customers_snapshot.sql` - tracks changes to `first_name`, `last_name`, `email`, `city`, `country`
+- `snapshots/dim_products_snapshot.sql` - tracks changes to `product_name`, `category`, `brand`, `unit_price`
+
+Each snapshot adds four metadata columns automatically: `dbt_valid_from`, `dbt_valid_to`, `dbt_scd_id`, `dbt_updated_at`. A row with `dbt_valid_to = NULL` is the current version; any row with a populated `dbt_valid_to` is historical.
+
+### Why the check strategy instead of timestamp
+
+dbt snapshots support two strategies for detecting changes:
+
+- **timestamp** - relies on a source column (e.g. `updated_at`) that the source system updates whenever a row changes. Efficient, but only as reliable as the source's discipline in maintaining that column.
+- **check** - compares the actual values of a specified list of columns between snapshot runs, with no timestamp column required.
+
+The synthetic `customers` and `products` source tables in this project have no `updated_at` column, so the `timestamp` strategy is not available. The `check` strategy was used instead, explicitly listing the columns worth tracking for each entity. This was verified by directly updating a test row in `raw.customers` and re-running `dbt snapshot`, confirming the old value was closed out (`dbt_valid_to` populated) and a new current row was inserted.
+
+Run snapshots manually with:
+
+    docker exec -it airflow-dbt-1 dbt snapshot --project-dir /opt/dbt_project --profiles-dir /root/.dbt
+
 ## Orchestration (Airflow)
 
 The DAG `softcart_pipeline` runs daily and chains three tasks:
