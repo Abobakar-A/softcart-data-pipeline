@@ -1,3 +1,10 @@
+{{
+    config(
+        materialized='incremental',
+        unique_key='order_item_id',
+        incremental_strategy='merge'
+    )
+}}
 select
     oi.order_item_id,
     oi.order_id,
@@ -14,3 +21,6 @@ select
 from {{ ref('stg_order_items') }} oi
 left join {{ ref('stg_orders') }} o
     on oi.order_id = o.order_id
+{% if is_incremental() %}
+where o.order_date > (select max(order_date) from {{ this }})
+{% endif %}    
