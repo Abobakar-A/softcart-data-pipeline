@@ -114,6 +114,42 @@ Run snapshots manually with:
 
     docker exec -it airflow-dbt-1 dbt snapshot --project-dir /opt/dbt_project --profiles-dir /root/.dbt
 
+## Clickstream Event Tracking
+
+In addition to order data, this project tracks simulated browsing behavior (clickstream events) to model a realistic customer funnel: browsing -> viewing a product -> adding to cart -> purchasing.
+
+### Event shape
+
+Clickstream data is semi-structured (different event types carry different fields), so it's stored as JSON rather than CSV. Each event looks like:
+
+    {
+      "event_id": "evt_...",
+      "session_id": "sess_...",
+      "customer_id": 42,
+      "event_type": "product_view",
+      "product_id": 1234,
+      "event_timestamp": "2026-07-12T14:22:03"
+    }
+
+`event_type` is one of `page_view`, `product_view`, `add_to_cart`, or `purchase`. Not every session reaches every stage, simulating realistic drop-off through the funnel.
+
+### Pipeline
+
+1. `generate_and_upload_clickstream` (in the DAG) generates ~30 fake browsing sessions per run and uploads them as JSON Lines to ADLS Gen2, under `clickstream/`.
+2. Raw JSON is loaded into `raw.clickstream_events` (a single `VARIANT` column holding the full event, plus a `loaded_at` timestamp), using a dedicated `json_format` file format.
+3. `stg_clickstream_events` flattens the JSON into clean, typed columns (`event_id`, `session_id`, `customer_id`, `event_type`, `product_id`, `event_timestamp`).
+4. `fct_clickstream_events` is the final marts-layer fact table, materialized as `incremental` (new events are appended by `event_timestamp`, existing events are never updated).
+
+### One-off setup macros
+
+A few macros in `macros/` were used as one-time setup helpers while building this feature, since `dbt show` only supports read queries and these are schema-altering statements:
+
+- `setup_json_format.sql` - created the `json_format` file format in Snowflake (one-time; already applied)
+- `create_clickstream_table.sql` - created the `raw.clickstream_events` table (one-time; already applied)
+- `load_clickstream_test.sql` - loaded a test batch of clickstream JSON into the raw table during development
+
+These aren't part of the regular pipeline and don't need to be run again; they're kept for reference/reproducibility.
+
 ## Orchestration (Airflow)
 
 The DAG `softcart_pipeline` runs daily and chains three tasks:
@@ -182,6 +218,7 @@ Done:
 - dbt docs site generation, auto-deployed to GitHub Pages: https://abobakar-a.github.io/softcart-data-pipeline/
 - Incremental materialization for `fct_orders`
 - SCD Type 2 change tracking for `dim_customers` and `dim_products` via dbt snapshots
+- Clickstream event tracking (JSON ingestion, staging, incremental marts fact table)
 - Version controlled on GitHub
 
 Not yet implemented (roadmap):
