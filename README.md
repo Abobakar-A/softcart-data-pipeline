@@ -166,6 +166,21 @@ The fix: `stg_orders` now deduplicates by `order_id` using `qualify row_number()
 
 `fct_clickstream_events` did not require the same staging-layer fix, since its incremental `merge` on `unique_key='event_id'` handled the redundant load correctly without additional deduplication.
 
+## Failure Alerting
+
+The pipeline sends a Slack notification automatically whenever any task fails, so failures are visible immediately rather than requiring someone to check the Airflow UI.
+
+### How it works
+
+- `slack_failure_alert` (in the DAG) posts a formatted message to a Slack Incoming Webhook, including the failing DAG, task, run date, and a direct link to the task's logs.
+- It's wired in once via `default_args["on_failure_callback"]`, so it automatically applies to every task in the DAG without needing to be added individually.
+- The webhook URL is stored as an Airflow Variable (`slack_webhook_url`), not hardcoded in the DAG file.
+- Airflow's default retry behavior (`retries: 1`) means the alert fires only after all retries are exhausted, not on the first failed attempt - avoiding noisy alerts for transient issues that self-resolve on retry.
+
+### Setup
+
+    docker exec -it airflow-airflow-scheduler-1 airflow variables set slack_webhook_url "<your Slack Incoming Webhook URL>"
+
 ## Orchestration (Airflow)
 
 The DAG `softcart_pipeline` runs daily and chains three tasks:
@@ -236,8 +251,8 @@ Done:
 - SCD Type 2 change tracking for `dim_customers` and `dim_products` via dbt snapshots
 - Clickstream event tracking (JSON ingestion, staging, incremental marts fact table)
 - Idempotent pipeline runs (deterministic IDs + staging-layer deduplication), verified by re-running the DAG twice for the same day
+- Automated Slack failure alerting for all DAG tasks
 - Version controlled on GitHub
 
 Not yet implemented (roadmap):
 - BI/dashboard layer on top of the marts schema
-- Failure alerting (email/Slack)

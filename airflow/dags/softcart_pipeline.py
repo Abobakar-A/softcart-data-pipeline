@@ -10,11 +10,7 @@ from airflow.hooks.base import BaseHook
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from faker import Faker
 
-default_args = {
-    "owner": "airflow",
-    "retries": 1,
-    "retry_delay": timedelta(minutes=5),
-}
+
 
 
 def generate_and_upload_orders(**context):
@@ -133,6 +129,36 @@ def generate_and_upload_clickstream(**context):
 
     print(f"Uploaded {len(events)} clickstream events to {file_name}")
     context["ti"].xcom_push(key="uploaded_clickstream_file", value=file_name)
+
+
+
+def slack_failure_alert(context):
+    import requests
+    from airflow.models import Variable
+
+    webhook_url = Variable.get("slack_webhook_url")
+    task_id = context["task_instance"].task_id
+    dag_id = context["task_instance"].dag_id
+    execution_date = context["ds"]
+    log_url = context["task_instance"].log_url
+
+    message = {
+        "text": (
+            f":red_circle: *Pipeline Failure*\n"
+            f"*DAG:* {dag_id}\n"
+            f"*Task:* {task_id}\n"
+            f"*Date:* {execution_date}\n"
+            f"<{log_url}|View logs>"
+        )
+    }
+    requests.post(webhook_url, json=message)
+
+default_args = {
+    "owner": "airflow",
+    "retries": 1,
+    "retry_delay": timedelta(minutes=5),
+    "on_failure_callback": slack_failure_alert,
+}
 
 with DAG(
     dag_id="softcart_pipeline",
