@@ -150,6 +150,22 @@ A few macros in `macros/` were used as one-time setup helpers while building thi
 
 These aren't part of the regular pipeline and don't need to be run again; they're kept for reference/reproducibility.
 
+## Idempotency
+
+Re-running the pipeline for the same day (e.g. after a failure and retry) should not create duplicate data. This required two fixes:
+
+### Deterministic IDs
+
+`generate_and_upload_orders` and `generate_and_upload_clickstream` originally generated IDs based on the exact execution timestamp (`datetime.now()`), meaning every run - including accidental re-runs for the same day - produced entirely different, non-overlapping IDs. Both functions now derive their IDs from the DAG's logical date (`context["ds_nodash"]`) instead, so re-running the pipeline for a given day regenerates the same set of IDs rather than a new one.
+
+### Deduplication at the staging layer
+
+Deterministic IDs alone were not sufficient: `COPY INTO` appends file contents into the raw table unconditionally, so loading the same file (or a file with the same IDs) twice results in duplicate rows in `raw.orders`. This was confirmed directly: running the DAG twice for the same day caused `unique_stg_orders_order_id` to fail with 50 duplicate rows, correctly blocking `fct_orders` from rebuilding on top of bad data.
+
+The fix: `stg_orders` now deduplicates by `order_id` using `qualify row_number() over (partition by order_id order by order_date desc) = 1`, keeping only one row per order regardless of how many times the same ID was loaded upstream. This was verified by re-running the full `dbt build` after the fix: all 28 checks passed, and `fct_orders` correctly processed 0 new rows on the redundant run.
+
+`fct_clickstream_events` did not require the same staging-layer fix, since its incremental `merge` on `unique_key='event_id'` handled the redundant load correctly without additional deduplication.
+
 ## Orchestration (Airflow)
 
 The DAG `softcart_pipeline` runs daily and chains three tasks:
@@ -219,6 +235,7 @@ Done:
 - Incremental materialization for `fct_orders`
 - SCD Type 2 change tracking for `dim_customers` and `dim_products` via dbt snapshots
 - Clickstream event tracking (JSON ingestion, staging, incremental marts fact table)
+- Idempotent pipeline runs (deterministic IDs + staging-layer deduplication), verified by re-running the DAG twice for the same day
 - Version controlled on GitHub
 
 Not yet implemented (roadmap):

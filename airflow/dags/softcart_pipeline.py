@@ -32,7 +32,7 @@ def generate_and_upload_orders(**context):
     rows = []
     for i in range(50):
         rows.append({
-            "order_id": int(datetime.now().strftime("%y%m%d%H%M%S")) * 1000 + i,
+            "order_id": int(context["ds_nodash"]) * 1000 + i,
             "customer_id": random.randint(1, 500),
             "order_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "payment_method": random.choice(["credit_card", "debit_card", "paypal", "cash_on_delivery"]),
@@ -61,7 +61,6 @@ def generate_and_upload_orders(**context):
 
 def generate_and_upload_clickstream(**context):
     from azure.storage.filedatalake import DataLakeServiceClient
-    import uuid
     import json
 
     conn = BaseHook.get_connection("azure_data_lake_default")
@@ -69,17 +68,20 @@ def generate_and_upload_clickstream(**context):
     service_client = DataLakeServiceClient.from_connection_string(connection_string)
     file_system_client = service_client.get_file_system_client(file_system="bronze")
 
+    run_date = context["ds_nodash"]
     events = []
     num_sessions = 30
+    event_counter = 0
 
-    for _ in range(num_sessions):
-        session_id = f"sess_{uuid.uuid4().hex[:8]}"
+    for session_num in range(num_sessions):
+        session_id = f"sess_{run_date}_{session_num}"
         customer_id = random.randint(1, 500)
         base_time = datetime.now()
 
         for i in range(random.randint(1, 3)):
+            event_counter += 1
             events.append({
-                "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                "event_id": f"evt_{run_date}_{event_counter}",
                 "session_id": session_id,
                 "customer_id": customer_id,
                 "event_type": "page_view",
@@ -89,8 +91,9 @@ def generate_and_upload_clickstream(**context):
 
         if random.random() < 0.6:
             product_id = random.randint(1, 200)
+            event_counter += 1
             events.append({
-                "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                "event_id": f"evt_{run_date}_{event_counter}",
                 "session_id": session_id,
                 "customer_id": customer_id,
                 "event_type": "product_view",
@@ -99,8 +102,9 @@ def generate_and_upload_clickstream(**context):
             })
 
             if random.random() < 0.4:
+                event_counter += 1
                 events.append({
-                    "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                    "event_id": f"evt_{run_date}_{event_counter}",
                     "session_id": session_id,
                     "customer_id": customer_id,
                     "event_type": "add_to_cart",
@@ -109,8 +113,9 @@ def generate_and_upload_clickstream(**context):
                 })
 
                 if random.random() < 0.5:
+                    event_counter += 1
                     events.append({
-                        "event_id": f"evt_{uuid.uuid4().hex[:10]}",
+                        "event_id": f"evt_{run_date}_{event_counter}",
                         "session_id": session_id,
                         "customer_id": customer_id,
                         "event_type": "purchase",
@@ -160,6 +165,18 @@ with DAG(
         """,
     )
 
+
+    load_clickstream_task = SnowflakeOperator(
+        task_id="load_clickstream_to_snowflake",
+        snowflake_conn_id="snowflake_default",
+        sql="""
+            COPY INTO softcart_db.raw.clickstream_events (raw_event)
+            FROM @softcart_db.raw.bronze_stage/{{ ti.xcom_pull(task_ids='generate_and_upload_clickstream', key='uploaded_clickstream_file') }}
+            FILE_FORMAT = softcart_db.raw.json_format
+            ON_ERROR = 'CONTINUE';
+        """,
+    )
+
     run_dbt_task = BashOperator(
         task_id="run_dbt_build",
         bash_command=(
@@ -169,4 +186,6 @@ with DAG(
     )
 
 
-    generate_data_task >> load_to_snowflake_task >> run_dbt_task
+    generate_data_task >> load_to_snowflake_task
+    generate_clickstream_task >> load_clickstream_task
+    [load_to_snowflake_task, load_clickstream_task] >> run_dbt_task
