@@ -1,7 +1,6 @@
 with source as (
     select * from softcart_db.raw.orders
 )
-
 select
     order_id,
     customer_id,
@@ -11,3 +10,4 @@ select
     shipment_status,
     order_total
 from source
+qualify row_number() over (partition by order_id order by order_date desc) = 1
