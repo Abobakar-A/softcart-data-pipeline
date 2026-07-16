@@ -276,4 +276,13 @@ Done:
 - Interactive BI dashboard (Power BI via Fabric): KPIs, revenue trend, top products, clickstream conversion funnel
 - Version controlled on GitHub
 
-Not yet implemented (roadmap):
+## Configuration
+
+This project needs credentials for Snowflake, Azure Data Lake, and Slack. None of these are committed to the repo.
+
+1. Copy `.env.example` to `.env` and fill in your values.
+2. Create `airflow/dbt_profile/profiles.yml` with your Snowflake connection (see `.env.example` for the fields needed).
+3. Set up an Airflow connection named `azure_data_lake_default` with your storage connection string.
+4. Set an Airflow Variable named `slack_webhook_url` with your Slack webhook URL.
+
+`.env`, `airflow/dbt_profile/`, and other credential files are excluded via `.gitignore`.
