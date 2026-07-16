@@ -181,6 +181,27 @@ The pipeline sends a Slack notification automatically whenever any task fails, s
 
     docker exec -it airflow-airflow-scheduler-1 airflow variables set slack_webhook_url "<your Slack Incoming Webhook URL>"
 
+## BI Dashboard
+
+An interactive Power BI dashboard was built on top of the marts layer, connected via Microsoft Fabric.
+
+**Live dashboard:** https://app.fabric.microsoft.com/links/GnSe8WPV9j?ctid=d9c25066-ba78-4b0f-8401-6b35fd17bfc9&pbi_source=linkShare
+
+![Softcart Dashboard](docs/images/dashboard.png)
+
+### What it shows
+
+- **KPI summary** - Total Revenue, Total Orders, Total Customers
+- **Revenue Trend** - daily revenue over time
+- **Top Products by Revenue** - highest-earning products
+- **Customer Conversion Funnel** - page_view -> product_view -> add_to_cart -> purchase, built from clickstream data
+
+### How it was built
+
+- Snowflake `marts` tables were loaded into a Fabric Lakehouse via a Dataflow Gen2 (using a Power Query Blank Query with `Snowflake.Databases(...)`, to work around a known bug in Fabric's guided Snowflake connector UI)
+- A semantic model defines relationships between `fct_orders`, `fct_clickstream_events`, `dim_customers`, and `dim_products` - a galaxy schema (two fact tables sharing the same dimensions)
+- DAX measures (`Total Revenue`, `Total Orders`, `Total Customers`) back the KPI cards and charts
+
 ## Orchestration (Airflow)
 
 The DAG `softcart_pipeline` runs daily and chains three tasks:
@@ -252,7 +273,7 @@ Done:
 - Clickstream event tracking (JSON ingestion, staging, incremental marts fact table)
 - Idempotent pipeline runs (deterministic IDs + staging-layer deduplication), verified by re-running the DAG twice for the same day
 - Automated Slack failure alerting for all DAG tasks
+- Interactive BI dashboard (Power BI via Fabric): KPIs, revenue trend, top products, clickstream conversion funnel
 - Version controlled on GitHub
 
 Not yet implemented (roadmap):
-- BI/dashboard layer on top of the marts schema
