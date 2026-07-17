@@ -5,6 +5,7 @@ import json
 import random
 
 from airflow.hooks.base import BaseHook
+from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
 from faker import Faker
 
 
@@ -120,3 +121,52 @@ def generate_and_upload_clickstream(**context):
 
     print(f"Uploaded {len(events)} clickstream events to {file_name}")
     context["ti"].xcom_push(key="uploaded_clickstream_file", value=file_name)
+
+
+def generate_and_upload_returns(**context):
+    from azure.storage.filedatalake import DataLakeServiceClient
+
+    # Pull real order_ids from Snowflake so every return references a real order
+    hook = SnowflakeHook(snowflake_conn_id="snowflake_default")
+    real_order_ids = [
+        row[0] for row in hook.get_records(
+            "SELECT DISTINCT order_id FROM softcart_db.raw.order_items LIMIT 500"
+        )
+    ]
+
+    if not real_order_ids:
+        print("No orders found yet, skipping returns generation for this run.")
+        return
+
+    conn = BaseHook.get_connection("azure_data_lake_default")
+    connection_string = conn.extra_dejson.get("connection_string")
+    service_client = DataLakeServiceClient.from_connection_string(connection_string)
+    file_system_client = service_client.get_file_system_client(file_system="bronze")
+
+    run_date = context["ds_nodash"]
+    rows = []
+    num_returns = max(1, int(len(real_order_ids) * 0.05))  # ~5% of recent orders get a return
+
+    for i in range(num_returns):
+        rows.append({
+            "return_id": int(run_date) * 1000 + i,
+            "order_id": random.choice(real_order_ids),
+            "return_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "reason": random.choice(["damaged", "wrong_item", "no_longer_needed", "defective", "size_issue"]),
+            "status": random.choices(
+                ["requested", "approved", "rejected", "refunded"], weights=[0.2, 0.3, 0.1, 0.4]
+            )[0],
+            "refund_amount": round(random.uniform(10, 300), 2),
+        })
+
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
+    writer.writeheader()
+    writer.writerows(rows)
+
+    file_name = f"returns/returns_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    file_client = file_system_client.get_file_client(file_name)
+    file_client.upload_data(buffer.getvalue(), overwrite=True)
+
+    print(f"Uploaded {len(rows)} returns to {file_name}")
+    context["ti"].xcom_push(key="uploaded_returns_file", value=file_name)

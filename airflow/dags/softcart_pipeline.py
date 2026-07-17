@@ -5,7 +5,7 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 
-from softcart_utils.generators import generate_and_upload_orders, generate_and_upload_clickstream
+from softcart_utils.generators import generate_and_upload_orders, generate_and_upload_clickstream, generate_and_upload_returns
 from softcart_utils.alerts import slack_failure_alert, slack_test_summary
 
 
@@ -57,6 +57,21 @@ with DAG(
             ON_ERROR = 'CONTINUE';
         """,
     )
+    generate_returns_task = PythonOperator(
+        task_id="generate_and_upload_returns",
+        python_callable=generate_and_upload_returns,
+    )
+
+    load_returns_task = SnowflakeOperator(
+        task_id="load_returns_to_snowflake",
+        snowflake_conn_id="snowflake_default",
+        sql="""
+            COPY INTO softcart_db.raw.returns
+            FROM @softcart_db.raw.bronze_stage/{{ ti.xcom_pull(task_ids='generate_and_upload_returns', key='uploaded_returns_file') }}
+            FILE_FORMAT = softcart_db.raw.csv_format
+            ON_ERROR = 'CONTINUE';
+        """,
+    )
 
     run_dbt_task = BashOperator(
         task_id="run_dbt_build",
@@ -74,4 +89,5 @@ with DAG(
 
     generate_data_task >> load_to_snowflake_task
     generate_clickstream_task >> load_clickstream_task
-    [load_to_snowflake_task, load_clickstream_task] >> run_dbt_task >> slack_summary_task
+    load_to_snowflake_task >> generate_returns_task >> load_returns_task
+    [load_returns_task, load_clickstream_task] >> run_dbt_task >> slack_summary_task

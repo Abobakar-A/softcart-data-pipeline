@@ -114,3 +114,33 @@ models:
         data_type: number(10,2)
       - name: line_total
         data_type: number(10,2)
+  - name: stg_returns
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: return_id
+        data_type: int
+        tests:
+          - unique
+          - not_null
+      - name: order_id
+        data_type: int
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_orders')
+                field: order_id
+      - name: return_date
+        data_type: timestamp_ntz
+      - name: reason
+        data_type: string
+      - name: status
+        data_type: string
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['requested', 'approved', 'rejected', 'refunded']
+      - name: refund_amount
+        data_type: number(10,2)

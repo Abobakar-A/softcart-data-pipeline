@@ -17,3 +17,7 @@ models:
     config:
       materialized: incremental
       schema: marts
+  - name: fct_returns_analysis
+    config:
+      materialized: table
+      schema: marts
