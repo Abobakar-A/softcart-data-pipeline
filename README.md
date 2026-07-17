@@ -306,3 +306,9 @@ ALTER TABLE softcart_db.marts.fct_clickstream_events CLUSTER BY (event_timestamp
 ```
 
 Verified with `SYSTEM$CLUSTERING_INFORMATION()` — `average_depth: 1.0`, no overlaps. Note: `order_date` is a high-cardinality timestamp; for larger tables, clustering on `DATE(order_date)` would reduce re-clustering cost.
+## Code Organization
+
+Pipeline logic is split for maintainability:
+- `dags/softcart_pipeline.py` — DAG definition and task orchestration only
+- `dags/softcart_utils/generators.py` — synthetic data generation (orders, clickstream)
+- `dags/softcart_utils/alerts.py` — Slack notifications (failures, test summaries)
