@@ -126,13 +126,22 @@ def generate_and_upload_clickstream(**context):
 def generate_and_upload_returns(**context):
     from azure.storage.filedatalake import DataLakeServiceClient
 
-    # Pull real order_ids from Snowflake so every return references a real order
+    # Pull real order_ids AND their order_total from Snowflake, so every return
+    # references a real order and its refund_amount can never exceed the order total.
     hook = SnowflakeHook(snowflake_conn_id="snowflake_default")
-    real_order_ids = [
-        row[0] for row in hook.get_records(
-            "SELECT DISTINCT order_id FROM softcart_db.raw.order_items LIMIT 500"
-        )
-    ]
+    order_rows = hook.get_records(
+        """
+        SELECT o.order_id, o.order_total
+        FROM softcart_db.raw.orders o
+        INNER JOIN softcart_db.raw.order_items oi
+            ON o.order_id = oi.order_id
+        GROUP BY o.order_id, o.order_total
+        ORDER BY MAX(o.order_date) DESC
+        LIMIT 500
+        """
+    )
+    order_totals = {row[0]: float(row[1]) for row in order_rows}
+    real_order_ids = list(order_totals.keys())
 
     if not real_order_ids:
         print("No orders found yet, skipping returns generation for this run.")
@@ -148,15 +157,21 @@ def generate_and_upload_returns(**context):
     num_returns = max(1, int(len(real_order_ids) * 0.05))  # ~5% of recent orders get a return
 
     for i in range(num_returns):
+        chosen_order_id = random.choice(real_order_ids)
+        order_total = order_totals[chosen_order_id]
+        # Refund is a random portion of the order, never more than the order total itself
+        max_refund = max(10, min(300, order_total))
+        refund_amount = round(random.uniform(10, max_refund), 2)
+
         rows.append({
             "return_id": int(run_date) * 1000 + i,
-            "order_id": random.choice(real_order_ids),
+            "order_id": chosen_order_id,
             "return_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "reason": random.choice(["damaged", "wrong_item", "no_longer_needed", "defective", "size_issue"]),
             "status": random.choices(
                 ["requested", "approved", "rejected", "refunded"], weights=[0.2, 0.3, 0.1, 0.4]
             )[0],
-            "refund_amount": round(random.uniform(10, 300), 2),
+            "refund_amount": refund_amount,
         })
 
     buffer = io.StringIO()
