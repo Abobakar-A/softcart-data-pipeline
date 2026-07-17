@@ -21,3 +21,7 @@ models:
     config:
       materialized: table
       schema: marts
+  - name: fct_customer_rfm
+    config:
+      materialized: table
+      schema: marts
