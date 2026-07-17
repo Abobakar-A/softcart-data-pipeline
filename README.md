@@ -312,3 +312,33 @@ Pipeline logic is split for maintainability:
 - `dags/softcart_pipeline.py` — DAG definition and task orchestration only
 - `dags/softcart_utils/generators.py` — synthetic data generation (orders, clickstream)
 - `dags/softcart_utils/alerts.py` — Slack notifications (failures, test summaries)
+## Returns Data & Analysis
+
+A new `returns` data source tracks product returns, linked to real orders.
+
+**Pipeline:**
+1. `generate_and_upload_returns` (Airflow) pulls real `order_id`s and their `order_total` from Snowflake, and generates a batch of returns — each capped so `refund_amount` can never exceed the original order total.
+2. Loaded into `raw.returns` via `COPY INTO`.
+3. `stg_returns` (staging view) cleans and deduplicates the raw data.
+4. `fct_returns_analysis` (marts table) aggregates returns per product: total returns, total refunded, net revenue after refunds, and return rate %.
+
+**Data quality:**
+- `relationships` test: every return must reference a real, existing order.
+- Custom test (`assert_refund_not_exceeding_order_total`): fails if any refund amount exceeds its order's total — catches bad data before it reaches the dashboard.
+
+## Schema Organization Fix
+
+Fixed a schema drift issue where models without an explicit `schema` config fell back to the profile's default (`dbt_dev`) instead of their intended schema (`marts`/`staging`). `dbt_project.yml` now sets `+schema` at the folder level, so any new model automatically lands in the correct schema without needing to configure it per-file.
+
+```yaml
+models:
+  softcart:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
+```
+
+Also cleaned up orphaned duplicate tables left behind in `staging` and `staging_marts` from before this fix.
