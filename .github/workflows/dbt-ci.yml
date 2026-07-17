@@ -67,6 +67,7 @@ jobs:
           export AIRFLOW_HOME=/tmp/airflow_ci
           mkdir -p $AIRFLOW_HOME/dags
           cp airflow/dags/softcart_pipeline.py $AIRFLOW_HOME/dags/
+          cp -r airflow/dags/softcart_utils $AIRFLOW_HOME/dags/
           airflow db init
           python -c "
           from airflow.models import DagBag
