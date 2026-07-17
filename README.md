@@ -296,3 +296,13 @@ Example message:
 2. dbt writes the results to `target/run_results.json`.
 3. An Airflow task (`slack_test_summary`) reads that file, counts passed/failed tests, and posts a summary to Slack via the same webhook used for failure alerts.
 4. This task runs regardless of whether the pipeline succeeded or failed (`trigger_rule="all_done"`), so you always get a status update.
+## Performance: Clustering Keys
+
+As tables grow, Snowflake performance benefits from clustering keys that align with common query filters.
+
+```sql
+ALTER TABLE softcart_db.marts.fct_orders CLUSTER BY (order_date);
+ALTER TABLE softcart_db.marts.fct_clickstream_events CLUSTER BY (event_timestamp);
+```
+
+Verified with `SYSTEM$CLUSTERING_INFORMATION()` — `average_depth: 1.0`, no overlaps. Note: `order_date` is a high-cardinality timestamp; for larger tables, clustering on `DATE(order_date)` would reduce re-clustering cost.
