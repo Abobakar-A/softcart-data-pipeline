@@ -11,8 +11,6 @@ from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 from faker import Faker
 
 
-
-
 def generate_and_upload_orders(**context):
     from azure.storage.filedatalake import DataLakeServiceClient
 
@@ -50,9 +48,6 @@ def generate_and_upload_orders(**context):
 
     print(f"Uploaded {len(rows)} new orders to {file_name}")
     context["ti"].xcom_push(key="uploaded_file", value=file_name)
-
-
-
 
 
 def generate_and_upload_clickstream(**context):
@@ -131,7 +126,6 @@ def generate_and_upload_clickstream(**context):
     context["ti"].xcom_push(key="uploaded_clickstream_file", value=file_name)
 
 
-
 def slack_failure_alert(context):
     import requests
     from airflow.models import Variable
@@ -152,6 +146,33 @@ def slack_failure_alert(context):
         )
     }
     requests.post(webhook_url, json=message)
+
+
+def slack_test_summary(**context):
+    import json
+    import requests
+    from airflow.models import Variable
+
+    webhook_url = Variable.get("slack_webhook_url")
+
+    with open("/opt/dbt_project/target/run_results.json") as f:
+        results = json.load(f)
+
+    test_results = [r for r in results["results"] if r["unique_id"].startswith("test.")]
+    passed = sum(1 for r in test_results if r["status"] == "pass")
+    total = len(test_results)
+    failed = total - passed
+
+    icon = ":white_check_mark:" if failed == 0 else ":warning:"
+    message = {
+        "text": (
+            f"{icon} *dbt Test Summary*\n"
+            f"Passed: {passed}/{total}\n"
+            f"Failed: {failed}"
+        )
+    }
+    requests.post(webhook_url, json=message)
+
 
 default_args = {
     "owner": "airflow",
@@ -191,7 +212,6 @@ with DAG(
         """,
     )
 
-
     load_clickstream_task = SnowflakeOperator(
         task_id="load_clickstream_to_snowflake",
         snowflake_conn_id="snowflake_default",
@@ -211,7 +231,12 @@ with DAG(
         ),
     )
 
+    slack_summary_task = PythonOperator(
+        task_id="slack_test_summary",
+        python_callable=slack_test_summary,
+        trigger_rule="all_done",
+    )
 
     generate_data_task >> load_to_snowflake_task
     generate_clickstream_task >> load_clickstream_task
-    [load_to_snowflake_task, load_clickstream_task] >> run_dbt_task
+    [load_to_snowflake_task, load_clickstream_task] >> run_dbt_task >> slack_summary_task

@@ -289,11 +289,15 @@ services:
         condition: service_completed_successfully
   dbt:
     image: python:3.12-slim
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
     volumes:
       - ${AIRFLOW_PROJ_DIR:-.}/..:/opt/dbt_project
+      - ./dbt_profile:/root/.dbt
     working_dir: /opt/dbt_project
     entrypoint: ["/bin/bash", "-c"]
     command: ["pip install --quiet dbt-snowflake==1.11.6 && tail -f /dev/null"]
+
 volumes:
   postgres-db-volume:
-
