@@ -286,3 +286,13 @@ This project needs credentials for Snowflake, Azure Data Lake, and Slack. None o
 4. Set an Airflow Variable named `slack_webhook_url` with your Slack webhook URL.
 
 `.env`, `airflow/dbt_profile/`, and other credential files are excluded via `.gitignore`.
+## Automated Test Alerts
+
+After every pipeline run, a Slack notification is sent summarizing the dbt test results — no need to check Airflow logs manually.
+
+Example message:
+**How it works:**
+1. `dbt build` runs all models, snapshots, and data quality tests.
+2. dbt writes the results to `target/run_results.json`.
+3. An Airflow task (`slack_test_summary`) reads that file, counts passed/failed tests, and posts a summary to Slack via the same webhook used for failure alerts.
+4. This task runs regardless of whether the pipeline succeeded or failed (`trigger_rule="all_done"`), so you always get a status update.
