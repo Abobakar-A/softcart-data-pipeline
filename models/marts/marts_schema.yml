@@ -46,3 +46,7 @@ models:
               arguments:
                 to: ref('stg_products')
                 field: product_id
+  - name: fct_customer_cohorts
+    config:
+      materialized: table
+      schema: marts            
