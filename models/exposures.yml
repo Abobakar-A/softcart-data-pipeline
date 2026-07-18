@@ -1,0 +1,37 @@
+version: 2
+
+exposures:
+  - name: softcart_sales_dashboard
+    label: "Soft Cart — Sales & Customer Behavior Dashboard"
+    type: dashboard
+    maturity: high
+    url: https://app.fabric.microsoft.com/links/GnSe8WPV9j?ctid=d9c25066-ba78-4b0f-8401-6b35fd17bfc9&pbi_source=linkShare
+    description: >
+      Page 1 of the Power BI dashboard. Shows revenue KPIs, revenue trend,
+      top products by revenue, and the customer conversion funnel.
+    depends_on:
+      - ref('fct_orders')
+      - ref('fct_clickstream_events')
+      - ref('dim_customers')
+      - ref('dim_products')
+    owner:
+      name: Abobakar
+      email: abobakar@example.com
+
+  - name: softcart_returns_segments_dashboard
+    label: "Soft Cart — Returns & Customer Segments Dashboard"
+    type: dashboard
+    maturity: high
+    url: https://app.fabric.microsoft.com/links/GnSe8WPV9j?ctid=d9c25066-ba78-4b0f-8401-6b35fd17bfc9&pbi_source=linkShare
+    description: >
+      Page 2 of the Power BI dashboard. Shows total refunded, average return
+      rate, customer count by RFM segment, top products by return rate, and
+      a sortable customer table.
+    depends_on:
+      - ref('fct_returns_analysis')
+      - ref('fct_customer_rfm')
+      - ref('dim_customers')
+      - ref('dim_products')
+    owner:
+      name: Abobakar
+      email: abobakar@example.com
