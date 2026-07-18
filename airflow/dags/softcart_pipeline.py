@@ -6,7 +6,7 @@ from airflow.operators.bash import BashOperator
 from airflow.providers.snowflake.operators.snowflake import SnowflakeOperator
 
 from softcart_utils.generators import generate_and_upload_orders, generate_and_upload_clickstream, generate_and_upload_returns
-from softcart_utils.alerts import slack_failure_alert, slack_test_summary
+from softcart_utils.alerts import slack_failure_alert, slack_test_summary, slack_cost_alert
 
 
 default_args = {
@@ -86,8 +86,13 @@ with DAG(
         python_callable=slack_test_summary,
         trigger_rule="all_done",
     )
+    slack_cost_task = PythonOperator(
+        task_id="slack_cost_alert",
+        python_callable=slack_cost_alert,
+        trigger_rule="all_done",
+    )
 
     generate_data_task >> load_to_snowflake_task
     generate_clickstream_task >> load_clickstream_task
     load_to_snowflake_task >> generate_returns_task >> load_returns_task
-    [load_returns_task, load_clickstream_task] >> run_dbt_task >> slack_summary_task
+    [load_returns_task, load_clickstream_task] >> run_dbt_task >> slack_summary_task >> slack_cost_task

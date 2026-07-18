@@ -43,3 +43,30 @@ def slack_test_summary(**context):
         )
     }
     requests.post(webhook_url, json=message)
+def slack_cost_alert(**context):
+    from airflow.providers.snowflake.hooks.snowflake import SnowflakeHook
+
+    hook = SnowflakeHook(snowflake_conn_id="snowflake_default")
+    result = hook.get_first(
+        """
+        SELECT COALESCE(SUM(credits_used), 0)
+        FROM snowflake.account_usage.warehouse_metering_history
+        WHERE warehouse_name = 'COMPUTE_WH'
+          AND DATE(start_time) = CURRENT_DATE()
+        """
+    )
+    credits_today = float(result[0])
+    threshold = 2.0
+
+    if credits_today > threshold:
+        webhook_url = Variable.get("slack_webhook_url")
+        message = {
+            "text": (
+                f":money_with_wings: *Snowflake Cost Alert*\n"
+                f"Credits used today: {credits_today:.2f} (threshold: {threshold})\n"
+                f"Warehouse: COMPUTE_WH"
+            )
+        }
+        requests.post(webhook_url, json=message)
+    else:
+        print(f"Credits used today: {credits_today:.2f} — within threshold ({threshold})")    
