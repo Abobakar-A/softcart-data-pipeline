@@ -279,3 +279,15 @@ Airflow UI: `http://localhost:8080` (default credentials: `airflow` / `airflow`)
 - RFM customer segmentation
 - Two-page interactive Power BI dashboard
 - Snowflake clustering keys for query performance
+## Cost Monitoring (FinOps)
+
+A daily Slack alert checks Snowflake warehouse credit consumption against a threshold, using Snowflake's built-in `account_usage.warehouse_metering_history` view — the same data source Snowflake itself uses for billing.
+
+```sql
+SELECT COALESCE(SUM(credits_used), 0)
+FROM snowflake.account_usage.warehouse_metering_history
+WHERE warehouse_name = 'COMPUTE_WH'
+  AND DATE(start_time) = CURRENT_DATE()
+```
+
+If daily credit usage exceeds the threshold (currently 2.0 credits/day, set based on observed baseline usage), a Slack alert fires — the same pattern used for pipeline failures and test summaries. This runs as the final task in the DAG (`slack_cost_alert`).
