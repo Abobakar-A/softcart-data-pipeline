@@ -25,3 +25,24 @@ models:
     config:
       materialized: table
       schema: marts
+  - name: fct_returns
+    config:
+      materialized: table
+      schema: marts
+    columns:
+      - name: return_id
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: product_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_products')
+                field: product_id
