@@ -293,4 +293,18 @@ WHERE warehouse_name = 'COMPUTE_WH'
 If daily credit usage exceeds the threshold (currently 2.0 credits/day, set based on observed baseline usage), a Slack alert fires — the same pattern used for pipeline failures and test summaries. This runs as the final task in the DAG (`slack_cost_alert`).
 ## AI Agent for Test Failure Investigation
 
-When a dbt test fails, an AI agent (Google Gemini, via function calling) automatically investigates by running its own follow-up SQL queries against Snowflake — not just reporting the failure, but exploring the data to identify a likely root cause — then posts a plain-English summary to Slack. Capped at 5 tool-call iterations to prevent runaway loops; if it can't reach a confident conclusion, it says so rather than guessing.
+When a dbt test fails, an AI agent (Google Gemini, via function calling) automatically investigates the failure — not just reporting it, but actively querying Snowflake to find a likely root cause — then posts a plain-English summary to Slack.
+
+**How it works:**
+1. After `dbt build`, the agent checks `run_results.json` for failed tests.
+2. If any test failed, it gives Gemini a tool (`run_sql_query`) and a description of the failure, then lets the model decide what to investigate.
+3. The model runs its own follow-up SQL queries against Snowflake, reads the results, and either investigates further or concludes with a summary — capped at 5 tool-call iterations to prevent runaway loops.
+4. If it can't reach a confident conclusion within that limit, it says so honestly in the Slack message rather than guessing.
+
+This is deliberately built as an **agent**, not just an LLM call: the model has tools, decides its own next steps based on real query results, and stops on its own judgment — the same investigative loop a human on-call engineer would run manually.
+
+**Setup:**
+
+    docker exec -it airflow-airflow-scheduler-1 airflow variables set gemini_api_key "<your Gemini API key>"
+
+Model used: `gemini-flash-latest` (Google AI Studio free tier — 1,500 requests/day, no billing required).
