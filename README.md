@@ -291,3 +291,6 @@ WHERE warehouse_name = 'COMPUTE_WH'
 ```
 
 If daily credit usage exceeds the threshold (currently 2.0 credits/day, set based on observed baseline usage), a Slack alert fires — the same pattern used for pipeline failures and test summaries. This runs as the final task in the DAG (`slack_cost_alert`).
+## AI Agent for Test Failure Investigation
+
+When a dbt test fails, an AI agent (Google Gemini, via function calling) automatically investigates by running its own follow-up SQL queries against Snowflake — not just reporting the failure, but exploring the data to identify a likely root cause — then posts a plain-English summary to Slack. Capped at 5 tool-call iterations to prevent runaway loops; if it can't reach a confident conclusion, it says so rather than guessing.
