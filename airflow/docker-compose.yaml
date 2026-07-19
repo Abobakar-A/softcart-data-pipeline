@@ -68,7 +68,7 @@ x-airflow-common:
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
     # WARNING: Use _PIP_ADDITIONAL_REQUIREMENTS option ONLY for a quick checks
     # for other purpose (development, test and especially production usage) build/extend Airflow image.
-    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-azure-storage-file-datalake faker apache-airflow-providers-snowflake apache-airflow-providers-docker redis==5.0.8}
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-azure-storage-file-datalake faker apache-airflow-providers-snowflake apache-airflow-providers-docker redis==5.0.8 google-genai}
     # The following line can be used to set a custom config file, stored in the local config folder
     # If you want to use it, outcomment it and replace airflow.cfg with the name of your config file
     # AIRFLOW_CONFIG: '/opt/airflow/config/airflow.cfg'
@@ -297,7 +297,7 @@ services:
       - ./dbt_profile:/root/.dbt
     working_dir: /opt/dbt_project
     entrypoint: ["/bin/bash", "-c"]
-    command: ["pip install --quiet dbt-snowflake==1.11.6 && tail -f /dev/null"]
+    command: ["pip install --quiet dbt-core==1.11.12 dbt-snowflake==1.11.6 && tail -f /dev/null"]
 
 volumes:
   postgres-db-volume:
